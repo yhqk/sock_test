@@ -1,3 +1,15 @@
+# Temp files
+Makefile~
+*.c~
+*.mod.c
+.tmp*
+*.cmd
+modules.order
+Module.symvers
+.gitignore~
+rootfs
+exec_*
+
 # Object files
 *.o
 *.ko
@@ -13,20 +25,3 @@
 *.a
 *.la
 *.lo
-
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
-
-# Executables
-*.exe
-*.out
-*.app
-*.i*86
-*.x86_64
-*.hex
-
-# Debug files
-*.dSYM/
