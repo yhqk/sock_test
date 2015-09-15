@@ -1,14 +1,14 @@
-/* socket_tcp_client.c
+/* socket_udp_client.c
   A client enters textline to server and also receive echo back message  
   Server is handled as thread with epoll
 
   Compiling and Execution
-  $ gcc -o exec_c socket_tcp_client.c -Wall -
+  $ gcc -o exec_c socket_udp_client.c -Wall -Wextra
   $ ./exec_c localhost 5000  
   or
   $ ./exec_c 192.168.1.46 5000
 
-  There can be several clients from different termials. 
+  There can be several clients from different terminals. 
  */
 
 #include <string.h>
@@ -32,7 +32,7 @@ void error(char *msg)
 
 int main(int argc, char *argv[])
 {
-    int sockTCPfd, portno, n;
+    int sockUDPfd, portno, n;
     struct sockaddr_in serv_addr;
     struct hostent *server;  // old the way.     
     char buffer[BUF_SIZE];
@@ -52,9 +52,9 @@ int main(int argc, char *argv[])
     }
 	
     portno = atoi(argv[2]);
-    sockTCPfd = socket(AF_INET, SOCK_STREAM, 0);
+    sockUDPfd = socket(AF_INET, SOCK_DGRAM, 0);
 
-    if (sockTCPfd < 0) {
+    if (sockUDPfd < 0) {
 	error("ERROR opening socket");
     }
 
@@ -69,10 +69,12 @@ int main(int argc, char *argv[])
     memcpy((char *)&serv_addr.sin_addr.s_addr,(char *)server->h_addr, 
 	   server->h_length);
     serv_addr.sin_port = htons(portno);
-    if (connect(sockTCPfd,(struct sockaddr *)&serv_addr,
+    if (connect(sockUDPfd,(struct sockaddr *)&serv_addr,
 		sizeof(serv_addr)) < 0) {
 	error("ERROR connecting");
     }
+
+    printf("Client: UDP socket is binded\n");
 
     srand(time(0));     
     clientId = rand() % 100;  // clientID 01-99
@@ -96,17 +98,10 @@ int main(int argc, char *argv[])
 	memset(buffer,0,len);
 	fgets(buffer,len,stdin); 
 	strcat(buffer_sent, buffer);
-	n = write(sockTCPfd,buffer_sent,strlen(buffer_sent));
+	n = write(sockUDPfd,buffer_sent,strlen(buffer_sent));
 	if (n < 0) {
 	    error("ERROR writing to socket");
 	}  
-	n = read(sockTCPfd,buffer_recv, BUF_SIZE);
-	if (n > 0) {
-	    printf("***Echo from Server***: %s",buffer_recv);
-	    }	
-        else {
-            printf("nothing to read");
-	    }
     }
     return 1; 
 }

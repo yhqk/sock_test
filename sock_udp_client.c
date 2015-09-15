@@ -4,7 +4,7 @@
   and print out via stdio and also echo back to clients	
 
   Compiling and Execution
-  $ gcc -o exec_s socket_tcp_server_thread.c -Wall -Wextra -lpthread
+  $ gcc -o exec_s socket_tcp_server_client.c -Wall -lpthread
   $ ./exec_s 5000 
 
   There can be several clients from different termials. 
