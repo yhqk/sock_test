@@ -5,7 +5,7 @@ UDP socket.
 
 
 $ gcc -o exec_s udp_server_stdio.c -Wall -Wextra
-$ ./EXEC_S 5000
+$ ./exec_s 5000
 
 ref: http://www.xinotes.net/notes/note/1810/ 
 

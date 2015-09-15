@@ -72,8 +72,8 @@ int main(int argc, char *argv[])
 	listen(sockTCPfd,BACKLOG);
 	clilen = sizeof(cli_addr);
 	new_sockTCPfd = accept(sockTCPfd,  
-			   (struct sockaddr *) &cli_addr, 
-			   (socklen_t *)&clilen);
+			(struct sockaddr *) &cli_addr, 
+			(socklen_t *)&clilen);
 	if (new_sockTCPfd < 0) { 
 	    error("ERROR internet socket on accept");
 	}	
