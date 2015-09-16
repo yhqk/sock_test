@@ -52,8 +52,8 @@ int main(int argc, char* argv[]) {
 	return 1;
     }
     printf("Server UDP socket binded %s:%d\n", 
-		inet_ntoa(other.sin_addr), 
-		ntohs(other.sin_port));
+		inet_ntoa(self.sin_addr), 
+		ntohs(self.sin_port));
  
     while ((n = recvfrom(sockUDPfd, buf, BUF_SIZE, 0, (struct sockaddr *)&other, &len)) != -1) {
         printf("Received echo from %s:%d: ", 

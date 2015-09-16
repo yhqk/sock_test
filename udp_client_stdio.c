@@ -23,6 +23,7 @@ ref: http://www.xinotes.net/notes/note/1810/
 #define BUF_SIZE 1024
 
 int main(int argc, char *argv[]) {
+
     struct sockaddr_in server;
     socklen_t len = sizeof(struct sockaddr_in);
     char buf[BUF_SIZE];
@@ -59,7 +60,7 @@ int main(int argc, char *argv[]) {
     printf("Client UDP socket is ready %s:%d: ", 
 	inet_ntoa(server.sin_addr), 
 	ntohs(server.sin_port)); 
-    /* send message 
+    /* send message comment out since the argv[3] is removed
     if (sendto(sockUDPfd, argv[3], strlen(argv[3]), 0, (struct sockaddr *) &server, len) == -1) {
 	perror("sendto()");
 	return 1;
