@@ -46,18 +46,29 @@ int main(int argc, char* argv[])
     char buf_text[40], buf_size[20];
     struct sockaddr_in self, other;	
     socklen_t len = sizeof(struct sockaddr_in);
-    int n, sockUDPfd, fd, port;
+    int n, sockUDPfd, fd, port, loop;
     char *mappedFilePtr, *temp_ptr; 
     ssize_t nwritten;
     time_t time_start, time_gap; 
     float throughput;
 
     n = 1; 
-    if (argc < 2) {
-	fprintf(stderr, "Usage: %s <port>\n", argv[0]);
+    if (argc < 3) {
+	fprintf(stderr, "Usage: %s <port> <times>\n", argv[0]);
 	return 1;
     }
 
+	loop = atoi(argv[2]);
+        printf("loop time %d\n", loop ); 
+
+
+    /* initialize socket */
+/*
+    if ((sockUDPfd=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
+	perror("socket");
+	return 1;
+    }
+*/
     /* initialize socket */
     sockUDPfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     check (sockUDPfd < 0, "UDP server socket %s failed: %s", sockUDPfd, strerror(errno));
@@ -79,7 +90,6 @@ int main(int argc, char* argv[])
         printf("Received request client from %s:%d:\n", 
 		inet_ntoa(other.sin_addr), 
 		ntohs(other.sin_port)); 
-//      printf("%s with size %d before trimming \n",buf_text, n);
         trim((char *)buf_text); 
 //      printf("%s with size %lu after trimming\n",buf_text, sizeof(buf_text));
 
@@ -95,8 +105,9 @@ int main(int argc, char* argv[])
         check (status < 0, "stat %s failed: %s",buf_text, strerror(errno));
         file_size = s.st_size;
         printf("To-be-transfered file %s with size %d\n", buf_text, (int)file_size);
-	bzero(buf_size, sizeof(buf_size)); 
+	bzero(buf_size, sizeof(buf_size));
 	sprintf(buf_size, "%d", (int)file_size);
+//        printf("Decimal value = %s\n", buf_size);
 	sendto(sockUDPfd, buf_size, 20, 0, (struct sockaddr *)&other, len);  	
 
         /* Memory-map the file. */
@@ -104,44 +115,40 @@ int main(int argc, char* argv[])
         check (mappedFilePtr== MAP_FAILED, "mmap %s failed: %s",
            argv[1], strerror (errno));
 
-        /* read return value and write return value check */
-        nleft = file_size; 
-        temp_ptr = mappedFilePtr; 	    
+	usleep( 5000 );  
 
-	usleep( 5000 );
-        time_start = time(NULL);   
-        printf("time start %i\n", (int)time_start); 
-        while ( nleft > 0 ) {
-            if ( nleft >= BUF_SIZE )
-                buf_len = BUF_SIZE; 
-	    else
-	        buf_len = nleft;  
-            if ( (nwritten = sendto(sockUDPfd, temp_ptr, buf_len, 0, 
-		(struct sockaddr *)&other, len)) <= 0) {
-                if (nwritten < 0 && errno == EINTR)
-	            nwritten = 0;       /* and call write() again */
-            	else
-                    return(-1);         /* error */
+	for ( n = loop; n > 0; n-- ) { 
+	    time_start = time(NULL);   
+            printf("time start %i\n", (int)time_start); 
+            nleft = file_size;
+            temp_ptr = mappedFilePtr; 
+            while ( nleft > 0 ) {
+            	if ( nleft >= BUF_SIZE )
+                    buf_len = BUF_SIZE; 
+	    	else
+	            buf_len = nleft;  
+            	if ( (nwritten = sendto(sockUDPfd, temp_ptr, buf_len, 0, 
+			(struct sockaddr *)&other, len)) <= 0) {
+                    if (nwritten < 0 && errno == EINTR)
+	            	nwritten = 0;       /* and call write() again */
+            	    else
+                    	return(-1);         /* error */
 	        }
-	
-//           printf("write size %d\n", (int)nwritten);   
-//           printf("left file size to write %d\n", (int)nleft);  
-            nleft -= nwritten;
-            temp_ptr += nwritten;
-//	    usleep( 1000 );   
-	}
-
-	time_gap = time(NULL) - time_start; 
-	if ( time_gap != 0 ) {
-	    throughput = (file_size/1000)/time_gap; 
-            printf("time gap %i; throughput %.2f KB/s\n", (int)time_gap, throughput);  
+            	//printf("left file size to write %d\n", (int)nleft);  
+            	nleft -= nwritten;
+            	temp_ptr += nwritten;
+	    	/* usleep( 500 );  */ 
+	   }
+	   time_gap = time(NULL) - time_start; 
+	   throughput = (file_size/1000000)/time_gap; 
+           printf("time gap %i; throughput %.2f MB/s\n", (int)time_gap, throughput);    
 	}
     	munmap(mappedFilePtr, file_size);
         close(fd);
-    }
-
-    close(sockUDPfd);
-    printf("\nCOMPLETED\n");
+     }
+ 
+     close(sockUDPfd);
+     printf("COMPLETED\n");
  
     return(0);
 }
@@ -170,3 +177,4 @@ char *trim(char *s)
 {     
     return rtrim(ltrim(s));  
 } 
+
