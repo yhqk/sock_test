@@ -7,7 +7,7 @@ CROSS_PATH=/home/novtech/Projects/buildroot-2014.08/output/host/usr/bin/arm-buil
 CROSS_CC=${CROSS_PATH}gcc -Wall -Wextra
 CROSS_LD=${CROSS_PATH}ld
 
-all: socket_tcp_server_thread socket_udp_server_thread udp_server_stdio udp_file1_server
+all: socket_tcp_server_thread socket_udp_server_thread udp_server_stdio udp_file1_server fileloop_udp_server
 
 socket_tcp_server_thread: socket_tcp_server_thread.o
 	${CROSS_CC} socket_tcp_server_thread.c -o socket_tcp_server_thread -lpthread
@@ -21,13 +21,18 @@ udp_server_stdio: udp_server_stdio.o
 udp_file1_server: udp_file1_server.o
 	${CROSS_CC} udp_file1_server.c -o udp_file1_server
 
+fileloop_udp_server: fileloop_udp_server.o
+	${CROSS_CC} fileloop_udp_server.c -o fileloop_udp_server
+
 clean: 
 	rm -f *.o 
-	rm -f socket_tcp_server_thread socket_udp_server_thread udp_server_stdio udp_file1_server
+	rm -f socket_tcp_server_thread socket_udp_server_thread udp_server_stdio
+	rm -f fileloop_udp_server udp_file1_server
 
 install: 
 	-@if [ ! -d ${PWD}/rootfs   ]; then mkdir -p ${PWD}/rootfs; fi
-	mv socket_tcp_server_thread socket_udp_server_thread udp_server_stdio udp_file1_server ${PWD}/rootfs
+	mv socket_tcp_server_thread socket_udp_server_thread udp_server_stdio ${PWD}/rootfs
+	mv fileloop_udp_server udp_file1_server ${PWD}/rootfs
 
 uninstall:
 	rm -fR rootfs

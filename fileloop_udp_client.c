@@ -30,7 +30,10 @@ $ ./exec_c 146.123.1.1 5000
 #include <fcntl.h>
 #include <time.h>
 
-#define BUF_SIZE 1024  
+#define BUF_SIZE 1024 
+#define BIG_DATA  40000000 
+#define STORE_MIN   300000
+#define TIME_GAP 5
 
 char* trim(char* input);
 
@@ -46,22 +49,21 @@ static void check (int test, const char * message, ...)
     }
 }
 
-int main(int argc, char *argv[]) 
-{
+int main(int argc, char *argv[]) {
 
     /* Information about the file. */
     struct stat s;
     int status; 
     size_t  file_size;	
     char buf_text[30], buf_file[BUF_SIZE];
-    int sockUDPfd, port, nleft, buf_len, loop, i;
+    int sockUDPfd, port, nleft, buf_len, loop, i=1;
     char new_file[]="copied_file";
-    ssize_t nwritten, nreceived, temp_n;
+    ssize_t nwritten, nreceived, temp_n=0;
     struct sockaddr_in servaddr;
     struct hostent *host;
     int fd_new; 
     socklen_t len = sizeof(struct sockaddr_in);
-    time_t time_start, time_gap; 
+    time_t time_start= 0, time_gap= 0; 
     float throughput;
 
     if (argc < 4) {
@@ -70,12 +72,12 @@ int main(int argc, char *argv[])
     }
 
     loop = atoi(argv[3]);
-    printf("Repeat time: %d\n", loop ); 
+    printf("Repeat times: %d\n", loop ); 
 
     host = gethostbyname(argv[1]);
     if (host == NULL) {
-	perror("gethostbyname");
-	return 1;
+	   perror("gethostbyname");
+	   return 1;
     }
  
     sockUDPfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -87,47 +89,48 @@ int main(int argc, char *argv[])
     servaddr.sin_port = htons(port);  // Port address
     servaddr.sin_addr = *((struct in_addr*) host->h_addr);
  
-    printf("Client UDP socket is ready %s:%d: ", 
+    printf("Client UDP socket is ready %s:%d ", 
 	inet_ntoa(servaddr.sin_addr), 
 	ntohs(servaddr.sin_port)); 
 
-    printf("\nEnter file to be transferred:");
+    printf("\nEnter file to be transferred: ");
     scanf("%s",buf_text);
  
     sendto(sockUDPfd, buf_text, strlen(buf_text)+1, 0,
-     (struct sockaddr *)&servaddr, sizeof(struct sockaddr));
+        (struct sockaddr *)&servaddr, sizeof(struct sockaddr));
 
     nreceived = recvfrom(sockUDPfd, buf_text, sizeof(buf_text), 0, (struct sockaddr *)&servaddr, &len); 
-    if ( nreceived != -1) {
-        trim((char *)buf_text); 	
-        file_size = atoi(buf_text);
-        printf("Found requested file with size %d\n", (int)file_size);
-
-	fd_new = open(new_file, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-	check (fd_new < 0, "open %s failed: %s", argv[2], strerror (errno));
-
-        nleft = file_size;  	    
+    check( nreceived < 0, "Recieving %s failed: %s", sockUDPfd, strerror(errno));
+    trim((char *)buf_text); 	
+    file_size = atoi(buf_text);
+    printf("Found requested file with size %.3f KB\n", (double)file_size/1000);
+    if ( file_size < STORE_MIN ) {
+        fd_new = open(new_file, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+        check (fd_new < 0, "open %s failed: %s", argv[2], strerror (errno));
+        nleft = file_size;      
+	time_start = time(NULL); /* seconds */   		
     	while ( nleft > 0 ) {
             if ( nleft >= BUF_SIZE )
                 buf_len = BUF_SIZE; 
-	    else {
-	        buf_len = nleft;  
-	       }
+            else 
+	           buf_len = nleft;  
             bzero(buf_file, sizeof(buf_file));
-	    nreceived = recvfrom(sockUDPfd, buf_file, buf_len, 0, (struct sockaddr *)&servaddr, &len); 
-   	    check( nreceived < 0, "Recieving %s failed: %s", sockUDPfd, strerror(errno));
-  	    if ( (nwritten = write(fd_new, buf_file, nreceived)) <= 0) {
-                if (nwritten < 0 && errno == EINTR)
-                    nwritten = 0;       /* and call write() again */
-            	else
-                    return(-1);         /* error */
-            	}
-/*
-	    fflush(stdout);
-            write(1, buf_file, nreceived);
-*/
-	    nleft -= nwritten;
+            nreceived = recvfrom(sockUDPfd, buf_file, buf_len, 0, (struct sockaddr *)&servaddr, &len); 
+            check( nreceived < 0, "Recieving %s failed: %s", sockUDPfd, strerror(errno));
+            nwritten = write(fd_new, buf_file, nreceived); 
+   	    check( nwritten < 0, "Write %s failed: %s", fd_new, strerror(errno));
+            if (nwritten < 0 && errno == EINTR) {
+                nwritten = 0;       /* and call write() again */
             }
+            nleft -= nwritten;
+    
+	    /* For VM is too slow to access memory set 30 sec timeout*/
+            time_gap = time(NULL) - time_start;
+            if ( time_gap > 30 ) { 
+                nleft=0; 
+            }	
+
+        }   
     	close(fd_new);
 
 	/* Re-open the check file size */
@@ -136,30 +139,31 @@ int main(int argc, char *argv[])
         status = fstat (fd_new, &s);
         check (status < 0, "stat %s failed: %s",new_file, strerror(errno));
         file_size = s.st_size;
-        printf("Copied %s with size %d\n", new_file, (int)file_size);
+        printf("Reopen/Check %s with size %.3f KB\n", new_file, (double)file_size/1000);
     	close(fd_new);
-	}
- 
-	if ( loop > 1 ) {
-	    temp_n = 0;  
-	    time_start = time(NULL); /* seconds */
-	    i = 0; 
+    }
+    else {
+	printf("Not store file over %d, just check throughput.\n", STORE_MIN);
+        loop = 2;  
+        } 	
+  
+	time_start = time(NULL); /* seconds */
+	while ( loop > 1 ) {
             bzero(buf_file, sizeof(buf_file));	
-	    while ((nreceived = recvfrom(sockUDPfd, buf_file, buf_len, 0, (struct sockaddr *)&servaddr, &len)) != -1) {
-	    	temp_n+=nreceived;
-		i++;  
-	        if ( i%100 == 0 ) {
-		    time_gap = time(NULL) - time_start; 
-		    throughput = (temp_n/1000)/time_gap; 
-	            printf("time gap %i; throughput %.2f KB/s\n", (int)time_gap, throughput);  
-		    time_start = time(NULL);
+	    nreceived = recvfrom(sockUDPfd, buf_file, BUF_SIZE, 0, (struct sockaddr *)&servaddr, &len); 
+   	    check( nreceived < 0, "Recieving %s failed: %s", sockUDPfd, strerror(errno));
+	    temp_n+=nreceived; 	
+            time_gap = time(NULL) - time_start;
+	    if ( time_gap > TIME_GAP ) { 
+		    throughput = ((double)temp_n/1000000)/time_gap; 
+		    printf("%10d recvfrom throughput %.3f MB/s, time gap %d sec\n", 
+	            	i, throughput, (int)time_gap);  
 		    temp_n = 0;
-		    i = 0; 			
-		}
-            bzero(buf_file, sizeof(buf_file));	
-	    }	
+                    time_start = time(NULL);		
+	    }
+	    i++; /* loop counter for recevform */	
 	}
-    close(sockUDPfd); /*never reach here*/
+    	close(sockUDPfd); /*never reach here unless there is another timer*/
  	
     return(0);
 }

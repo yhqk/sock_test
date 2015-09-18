@@ -1,0 +1,18 @@
+# ref: http://www.cs.colby.edu/maxwell/courses/tutorials/maketutor
+
+CC = gcc -Wall -Wextra -DNDEBUG
+CFLAGS = -I. 
+DEPS = 
+
+all: fileloop_udp_server fileloop_udp_client
+
+fileloop_udp_server: fileloop_udp_server.o
+	${CC} -o fileloop_udp_server fileloop_udp_server.c ${CFLAG}
+
+fileloop_udp_client: fileloop_udp_client.o
+	${CC} -o fileloop_udp_client fileloop_udp_client.c ${CFLAG}
+
+clean: 
+	rm -f fileloop_udp_client.o fileloop_udp_client
+	rm -f fileloop_udp_server.o fileloop_udp_server
+

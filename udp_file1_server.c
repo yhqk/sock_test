@@ -94,7 +94,7 @@ int main(int argc, char* argv[])
         status = fstat (fd, &s);
         check (status < 0, "stat %s failed: %s",buf_text, strerror(errno));
         file_size = s.st_size;
-        printf("To-be-transfered file %s with size %d\n", buf_text, (int)file_size);
+        printf("To-be-transfered file %s with size %d bytes\n", buf_text, (int)file_size);
 	bzero(buf_size, sizeof(buf_size)); 
 	sprintf(buf_size, "%d", (int)file_size);
 	sendto(sockUDPfd, buf_size, 20, 0, (struct sockaddr *)&other, len);  	
@@ -131,16 +131,18 @@ int main(int argc, char* argv[])
 //	    usleep( 1000 );   
 	}
 
-	time_gap = time(NULL) - time_start; 
+	time_gap = time(NULL) - time_start;
 	if ( time_gap != 0 ) {
-	    throughput = (file_size/1000)/time_gap; 
-            printf("time gap %i; throughput %.2f KB/s\n", (int)time_gap, throughput);  
+	    printf("time start %i, time gap %i\n", (int)time_start, (int)time_gap);  
+	    throughput = (file_size)/time_gap; 
+            printf("Throughput %.2f B/s\n", throughput);  
 	}
+
     	munmap(mappedFilePtr, file_size);
         close(fd);
     }
 
-    close(sockUDPfd);
+ //   close(sockUDPfd);
     printf("\nCOMPLETED\n");
  
     return(0);

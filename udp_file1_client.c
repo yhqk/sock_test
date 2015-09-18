@@ -17,7 +17,8 @@
 #include <fcntl.h>
 
 
-#define BUF_SIZE   1024  
+#define BUF_SIZE 1024 
+#define MAX_FILESIZE_TO_WRITE 1000000 
 
 char* trim(char* input);
 
@@ -34,9 +35,15 @@ static void check (int test, const char * message, ...)
 }
 
 int main(int argc, char *argv[]) 
-{	
+{
+
+    /* Information about the file. */
+    struct stat s;
+    int status; 
+    size_t  file_size;	
+	
     char buf_text[30], buf_file[BUF_SIZE];
-    int sockUDPfd, port, file_size, nleft, buf_len;;
+    int sockUDPfd, port, nleft, buf_len;;
     char new_file[]="copied_file";
     ssize_t nwritten, nreceived;
     struct sockaddr_in servaddr;
@@ -75,11 +82,12 @@ int main(int argc, char *argv[])
      (struct sockaddr *)&servaddr, sizeof(struct sockaddr));
 
     nreceived = recvfrom(sockUDPfd, buf_text, sizeof(buf_text), 0, (struct sockaddr *)&servaddr, &len); 
-    if ( nreceived != -1) {
-        trim((char *)buf_text); 	
-        file_size = atoi(buf_text);
-        printf("Found requested file with size %d\n", file_size);
 
+    trim((char *)buf_text); 	
+    file_size = atoi(buf_text);
+    printf("Found requested file with size %d bytes\n", (int)file_size);
+
+    if ( (nreceived != -1) && (file_size < MAX_FILESIZE_TO_WRITE) ) {
 	fd_new = open(new_file, O_WRONLY | O_CREAT | O_TRUNC, 0666);
 	check (fd_new < 0, "open %s failed: %s", argv[2], strerror (errno));
 
@@ -109,11 +117,21 @@ int main(int argc, char *argv[])
 	    printf("buf_len %d, nreceived %d, nwritten %d, nleft %d\n", buf_len, (int)nreceived, (int)nwritten, (int)nleft);
             }
     	close(fd_new);
-	printf("close file \n"); 
+	printf("close copied file\n"); 
+
+	/* Re-open the check file size */
+        fd_new = open(new_file, O_RDONLY);
+        check (fd_new < 0, "open %s failed: %s", new_file, strerror(errno));
+        status = fstat (fd_new, &s);
+        check (status < 0, "stat %s failed: %s",new_file, strerror(errno));
+        file_size = s.st_size;
+        printf("Check copied %s with size %d bytes\n", new_file, (int)file_size);
+    	close(fd_new);
+
  	}
   
-    close(sockUDPfd);
-	printf("close socket\n");  	
+        close(sockUDPfd);
+	printf("close UDP socket\n");  	
     return(0);
 }
 

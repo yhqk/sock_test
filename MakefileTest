@@ -1,0 +1,18 @@
+# ref: http://www.cs.colby.edu/maxwell/courses/tutorials/maketutor
+
+CC = gcc -Wall -Wextra -DNDEBUG
+CFLAGS = -I.
+DEPS = 
+
+all: udp_file1_server udp_file1_client
+
+udp_file1_server: udp_file1_server.o
+	${CC} udp_file1_server.c -o udp_file1_server ${CFLAGS}
+
+udp_file1_client: udp_file1_client.o
+	${CC} -o udp_file1_client udp_file1_client.c -I.
+
+clean: 
+	rm -f udp_file1_client.o udp_file1_client
+	rm -f udp_file1_server.o udp_file1_server
+

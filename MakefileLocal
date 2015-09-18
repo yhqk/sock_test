@@ -1,0 +1,32 @@
+# Makefile for develop user space application 
+# 
+# Yuhong Qiu-Kaikkonen 2015
+
+CC = gcc -Wall -Wextra -DNDEBUG
+LD = ld
+
+all: socket_tcp_server_thread socket_udp_server_thread udp_server_stdio udp_file1_server
+
+socket_tcp_server_thread: socket_tcp_server_thread.o
+	${CC} socket_tcp_server_thread.c -o socket_tcp_server_thread -lpthread
+
+socket_udp_server_thread: socket_udp_server_thread.o
+	${CC} socket_udp_server_thread.c -o socket_udp_server_thread -lpthread
+
+udp_server_stdio: udp_server_stdio.o
+	${CC} udp_server_stdio.c -o udp_server_stdio -lpthread
+
+udp_file1_server: udp_file1_server.o
+	${CC} udp_file1_server.c -o udp_file1_server
+
+clean: 
+	rm -f *.o 
+	rm -f socket_tcp_server_thread socket_udp_server_thread udp_server_stdio udp_file1_server
+
+install: 
+	-@if [ ! -d ${PWD}/rootfs_local   ]; then mkdir -p ${PWD}/rootfs_local; fi
+	mv socket_tcp_server_thread socket_udp_server_thread udp_server_stdio udp_file1_server ${PWD}/rootfs
+
+uninstall:
+	rm -fR rootfs_local
+
