@@ -1,0 +1,26 @@
+# Makefile for develop user space application in cross compiling 
+# 
+# Yuhong Qiu-Kaikkonen 2015
+
+CROSS_PATH=/home/novtech/Projects/buildroot-2014.08/output/host/usr/bin/arm-buildroot-linux-gnueabihf-
+
+CROSS_CC=${CROSS_PATH}gcc -Wall -Wextra
+CROSS_LD=${CROSS_PATH}ld
+CFLAGS = -g -Wall -Wextra -I. 
+CFLAGS += -I${PWD}/images/
+
+all: udp_add_image01  
+
+udp_add_image01: udp_add_image01.o
+	${CROSS_CC} ${CFLAGS} udp_add_image01.c -o udp_add_image01 
+
+clean: 
+	rm -f *.o 
+	rm -f udp_add_image01
+install: 
+	-@if [ ! -d ${PWD}/rootfs   ]; then mkdir -p ${PWD}/rootfs; fi
+	mv udp_add_image01 ${PWD}/rootfs
+
+uninstall:
+	rm -fR rootfs
+
