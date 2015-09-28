@@ -14,29 +14,49 @@
 #include <sys/types.h> 
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 #include <pthread.h>
 #include <unistd.h>  
 #include <sys/un.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <sys/epoll.h>
+#include <time.h>
 
-/*
-#include "scanner_tablet_msg.h"
-*/
-
+/* local include files */
 #define MAC_DESKTOP_BUILD
 #include "scan_ctl_protocol.h"
 
+#include "data_array_image01.h"
+
+/* Definitions */ 
+/* epoll related parameters */
 #define MAXEVENTS         64
-#define BACKLOG           5      
+#define BACKLOG           5 
+
+/* */     
 #define TCP_BUF_HDR_SIZE  12
 #define TCP_BUF_SIZE      256
+
+#define DGRAM_SIZE        1472
+#define IMAGE_BLOCK_SIZE  1448
 #define TIME_GAP          10
-
+/*
 uint16_t image_test1[160*1000] = {0};
-
+*/
 struct epoll_event *ready;  
+
+typedef struct _udpPacket {
+  uint32_t blockId;
+  uint32_t packetId;
+  uint16_t spare1;
+  uint16_t spare2;
+  uint32_t offset;
+  uint64_t timestamp;
+  uint16_t image[IMAGE_BLOCK_SIZE];
+} udpPacket;
+
 
 /* Local functions */
 static void check (int test, const char * message, ...)
@@ -51,7 +71,7 @@ static void check (int test, const char * message, ...)
     }
 }
 
-/* function prototype */
+/* Local function prototype */
 
 void *tcp_client_handler(void *arg);
 void data_print_out(int length, char buffer[]); 
@@ -59,10 +79,17 @@ void scan_start_acq_in_handler(int fd, UsCtlHeader *buffer);
 void scan_ack_sent_handler(int fd, UsCtlHeader *buffer); 
 void scan_dummy_read_all_handler(int fd, UsCtlHeader *buffer); 
 void scan_dummy_ack_sent_with_payload_handler(int fd, UsCtlHeader *buffer); 
-int startAcqStatus = 0; 
+void scan_udp_connection_handler(char *hostname, unsigned int portno); 
+void scan_udp_data_sent_handler(int udp_fd); 
 
+/* Local data */
+int startAcqStatus = 0; 
+int delayMicroSec = 0; 
+
+/* Functions */
 int main(int argc, char *argv[])
 {
+    /* Data */
     int sockTCPfd, new_sockTCPfd, portno, clilen, epfd;
     int n, a=1;
     struct sockaddr_in addr_in, cli_addr;
@@ -70,9 +97,11 @@ int main(int argc, char *argv[])
     pthread_t helper_thread;
     pthread_attr_t thread_attr;
 
-    check(argc < 3, "ERROR: Only missing argument\nUsage: %s <port> <scan status>", argv[0]);
+    /* Code */
+    check(argc < 4, "ERROR: Only missing argument\nUsage: %s <port> <scan status> <delay time microsecond>", argv[0]);
 
-    startAcqStatus = atoi(argv[2]);   /* update teh status */
+    startAcqStatus = atoi(argv[2]);   
+    delayMicroSec = atoi(argv[3]); 
 
     /* create thread with epoll */
     pthread_attr_init(&thread_attr);
@@ -110,13 +139,13 @@ int main(int argc, char *argv[])
 
 void * tcp_client_handler(void *arg) {
 
-    /* data */
+    /* Data */
     char buffer[TCP_BUF_HDR_SIZE];
     int i;
     int epfd = *((int *)arg);
     ssize_t data_len=1;
 
-    /* code */
+    /* Code */
     printf("tcp_client_handler(): TCP socket is binded\n");
     
     while(1) {
@@ -128,25 +157,20 @@ void * tcp_client_handler(void *arg) {
 	    if (data_len <= 0) {
 		epoll_ctl(epfd, EPOLL_CTL_DEL, ready[i].data.fd, NULL);
 		close(ready[i].data.fd);
-		printf("???epoll event %d terminated\n",ready[i].data.fd); 
+		printf("epoll event %d terminated\n",ready[i].data.fd); 
 	    }	
 	    else {
-	        printf("\nTCP server received data with length %d from event %d\n", 
+	        printf("TCP server received data with length %d from event %d\n", 
                     (int)data_len, ready[i].data.fd);
-	        printf("id: %x; opcode: %x; payload length: %x", 
+	        printf("id: 0x%2x; opcode: 0x%2x; payload length: %d", 
                     ((UsCtlHeader *)buffer)->id, 
                     ((UsCtlHeader *)buffer)->opcode, 
                     ((UsCtlHeader *)buffer)->length);
 		data_print_out(data_len, buffer);
 	        switch (((UsCtlHeader *)buffer)->opcode) {
 		    case USCTL_START_ACQ:
-		        printf("START_ACQUISTION\n");
                         scan_start_acq_in_handler(ready[i].data.fd, 
                             (UsCtlHeader *)buffer); 
-/*	                scan_ack_sent_handler(ready[i].data.fd, 
-                            (UsCtlHeader *)buffer); */
-			scan_dummy_ack_sent_with_payload_handler(ready[i].data.fd, 
-                            (UsCtlHeader *)buffer);
 		        break;
 
 		    case USCTL_GET_VERSION :
@@ -160,6 +184,7 @@ void * tcp_client_handler(void *arg) {
 
 		    case USCTL_SPI_READ :
 	                /* payload for both directions */
+	                printf("USCTL_SPI_READ"); 
 	                scan_dummy_read_all_handler(ready[i].data.fd,
                             (UsCtlHeader *)buffer); 
                         scan_dummy_ack_sent_with_payload_handler(ready[i].data.fd,
@@ -167,6 +192,7 @@ void * tcp_client_handler(void *arg) {
                         break;
 
 	    	    case USCTL_STOP_ACQ:
+	                printf("USCTL_STOP_ACQ"); 
 		        /* no payload for both direction */
                         scan_ack_sent_handler(ready[i].data.fd, 
                             (UsCtlHeader *)buffer); 
@@ -190,35 +216,168 @@ void * tcp_client_handler(void *arg) {
 
 void scan_start_acq_in_handler(int fd, UsCtlHeader *buffer )
 {
+    /* Data */
     UsCtlStartAcqIn tcpMsg_startAcq;    
     int n_recv; 
     char buf_file[TCP_BUF_SIZE];
- 
-    printf("scan_start_acq_in_handler(): read rest of data");
+
+    struct sockaddr_in udpAddr;
+    char *s_addr;
+
+    /* Code */ 
+    printf("scan_start_acq_in_handler(): START_ACQUISTION rest of data:");
 
     n_recv = read(fd,buf_file, buffer->length); 
     data_print_out(n_recv, buf_file);
-    /* decode UDP IP address and */	
-    if (n_recv == (int)(buffer->length) )
+
+    printf("n_recv: %d, payload:%d\n", 
+	    n_recv,
+            (int)(buffer->length) );	
+    if (n_recv == (int)(buffer->length))
 	{
+	scan_ack_sent_handler(fd, buffer); 
 	memcpy(&(tcpMsg_startAcq.ipAddress), &buf_file, n_recv );
+        udpAddr.sin_addr.s_addr = htonl(tcpMsg_startAcq.ipAddress);
+        s_addr = inet_ntoa(udpAddr.sin_addr);
+/*        printf("UDP IP address: %s/0x%x; port:%d\n", 
+	    some_addr, tcpMsg_startAcq.ipAddress,
+            tcpMsg_startAcq.port ); */
+        scan_udp_connection_handler(s_addr, 
+	    tcpMsg_startAcq.port ); 	
 	}
     else
 	printf("scan_start_acq_in_handler(): data is missing");
-    /* decoding UDP IP address*/	
+	
 }
 
+void scan_udp_connection_handler(char *hostname, unsigned int portno )
+{
+    /* Data */  
+    int sockUDPfd; 
+    int ret_val; 
+    struct sockaddr_in udpServAddr;
+    struct hostent *udpServer;
+    socklen_t slen = sizeof(struct sockaddr_in);
+
+    /* Code */ 
+
+    sockUDPfd = socket(AF_INET, SOCK_DGRAM, 0);
+    check(sockUDPfd < 0, "Scanner: UDP socket create %s failed: %s", 
+        sockUDPfd, strerror(errno));
+    udpServer = gethostbyname(hostname);
+    if (udpServer == NULL) {
+	fprintf(stderr,"ERROR, no such UDP host\n");
+	exit(0);
+    }
+   
+    memset((char *) &udpServAddr, 0,sizeof(udpServAddr));  
+    udpServAddr.sin_family = AF_INET;
+    memcpy((char *)&udpServAddr.sin_addr.s_addr,(char *)udpServer->h_addr, 
+	   udpServer->h_length);
+    udpServAddr.sin_port = htons(portno);
+    ret_val = connect(sockUDPfd,(struct sockaddr *)&udpServAddr, sizeof(udpServAddr)); 
+    check (ret_val < 0, "UDP socket connection%s failed: %s", 
+        sockUDPfd, strerror(errno));
+    printf("Connect UDP socket as client %s: %d\n", 
+        inet_ntoa(udpServAddr.sin_addr), 
+        ntohs(udpServAddr.sin_port)); 
+
+    udpPacket dgram;
+    uint32_t block_id=0, packet_id=0, offset=0;
+    uint32_t copy_size; 	
+    ssize_t nsent = 0, total_sent=0;
+    time_t time_start, time_gap, time_start_per_image; 
+    float throughput;
+    int n=1;	
+
+    /* ??? ongoing */
+    time_start = time(NULL); /* seconds */  
+    time_start_per_image = time_start;
+    while(1) { 
+        dgram.blockId = block_id;
+        dgram.packetId = packet_id;
+        dgram.offset = offset;
+
+        copy_size = sizeof(data01) - offset; /* 160000*2 */
+        if (copy_size > IMAGE_BLOCK_SIZE ) {
+            copy_size = IMAGE_BLOCK_SIZE;
+        }
+
+        memcpy(&(dgram.image), &(data01[offset/2]), copy_size);
+	nsent = sendto(sockUDPfd, &dgram, DGRAM_SIZE, 0, (struct sockaddr *)&udpServAddr, slen); 
+        check (nsent < 0, "sentto() %s failed: %s", sockUDPfd, strerror(errno));
+        /*data_print_out(32, (char *)&dgram); */
+        packet_id++;
+    	offset += copy_size;
+
+	time_gap = time(NULL) - time_start;
+	total_sent += nsent; 
+           if ( time_gap >= TIME_GAP )  {
+               printf("blockID:%05d; packetId:%3d\n", 
+	           dgram.blockId, 
+                   dgram.packetId);
+
+	       throughput = ((double)total_sent/1000000)/time_gap; 
+	       printf("==> Average throughput/%dsec: %.2f MB/s = %.2f Mbits/s <==\n", 
+                   TIME_GAP, throughput, throughput*8 ); 
+	       time_start = time(NULL);
+               total_sent = 0; 
+	   } 	
+
+    	if (offset >= sizeof(data01)) {
+       	    packet_id = 0;
+            offset = 0;
+      	    block_id++;
+
+	    time_gap = time(NULL) - time_start_per_image;
+	    if (time_gap > 0 )
+	        {
+                throughput = ((double)(sizeof(data01)*n)/1000000)/time_gap;
+	        printf("blockId%4d: throughput/(%d images): %.2f MB/s = %.2f Mbits/s\n", 
+                    block_id, n, throughput, throughput*8 ); 
+	    	time_start_per_image = time(NULL);
+                n = 0; 
+	        }
+	    else 
+	        {
+	        n++; 
+	        } 
+    	}
+       	usleep(delayMicroSec); 
+    }
+}
 
 void scan_dummy_read_all_handler(int fd, UsCtlHeader *buffer )
 {
 
-    /* read all payload data */	    
+    /* Data */    
     int n_read, n_recv, n_left; 
     char buf_file[TCP_BUF_SIZE];
+
+    /* Code */
+    switch (buffer->opcode) {
+	case USCTL_SET_MOTOR_PARAMS:
+	    printf("USCTL_SET_MOTOR_PARAMS"); 
+	    break;
  
+	case USCTL_SET_ACQU_PARAMS:
+	    printf("USCTL_SET_ACQU_PARAMS"); 
+	    break;
+
+	case USCTL_SPI_WRITE:
+	    printf("USCTL_SPI_WRITE"); 
+	    break;	
+
+	default:
+             printf("scan_dummy_read_all_handler: unknown id %x:\n", 
+                  buffer->opcode);
+	     break;
+    } 
+
     n_left = buffer->length;     
     while ( n_left > 0 ) {
-        if ( n_left >= TCP_BUF_SIZE )
+        printf("scan_dummy_read_all_handler(): rest of data:"); 
+       if ( n_left >= TCP_BUF_SIZE )
             n_read = TCP_BUF_SIZE; 
 	else
 	    n_read = n_left; 
@@ -232,20 +391,23 @@ void scan_dummy_read_all_handler(int fd, UsCtlHeader *buffer )
 void scan_ack_sent_handler(int fd, UsCtlHeader *buffer )
 {
 
+    /* Data */   
     /* zero payload in ACK with startAcqStatus from argc[2] */	
-    UsCtlAck tcpMsg_ack;    
-    int msg_len, n_sent; 
+    char *buf_sent;
+    int n_sent; 
 
-    msg_len = sizeof(UsCtlAck); 
-    bzero( (void *)&tcpMsg_ack, msg_len);
-    tcpMsg_ack.hdr.id = buffer->id; 	
-    tcpMsg_ack.hdr.opcode = buffer->opcode;  	
-    tcpMsg_ack.hdr.length = 0;  /* payload as zero */
-    tcpMsg_ack.status = startAcqStatus; 
-    n_sent = write(fd, &tcpMsg_ack, msg_len);
+    /* Code */
+    buf_sent = (char *) malloc(sizeof(UsCtlAck));
+    bzero( (void *)buf_sent, sizeof(UsCtlAck));
+    ((UsCtlAck *)buf_sent)->hdr.id = buffer->id; 	
+    ((UsCtlAck *)buf_sent)->hdr.opcode = buffer->opcode;  	
+    ((UsCtlAck *)buf_sent)->hdr.length = 0; 
+    ((UsCtlAck *)buf_sent)->status = startAcqStatus; 
+    n_sent = write(fd,buf_sent, sizeof(UsCtlAck));
     check( n_sent < 0, "Write %s failed: %s", fd, strerror(errno));
-    printf("scan_ack_sent_handler(): Scanner sends ACK with msg length %d to client %d\n", 
-        n_sent, fd);
+    printf("scan_ack_sent_handler(): Scanner sends ACK to client %d:", fd);
+    data_print_out(n_sent, buf_sent);
+    free(buf_sent); 
     close(fd);
 }
 
@@ -256,28 +418,35 @@ void scan_dummy_ack_sent_with_payload_handler(int fd, UsCtlHeader *buffer)
     char *buf_sent; 
     int msg_len, n_sent; 
 
+    /* Code */
     switch (buffer->opcode) {
-	case USCTL_GET_VERSION :
+	case USCTL_GET_VERSION:
+	    printf("USCTL_GET_VERSION"); 
 	    msg_len = sizeof(UsCtlGetVersionOut); 
 	    break;
  
 	case USCTL_GET_MOTOR_PARAMS:
+	    printf("USCTL_GET_MOTOR_PARAMS"); 
 	    msg_len = sizeof(UsCtlGetMotorOut); 
 	    break;
 
 	case USCTL_GET_ACQU_PARAMS:
+	    printf("USCTL_GET_ACQU_PARAMS"); 
 	    msg_len = sizeof(UsCtlGetAcqParamOut); 
 	    break;
 
 	case USCTL_GET_BATTERY_STATUS:
+	    printf("USCTL_GET_BATTERY_STATUS"); 
 	    msg_len = sizeof(UsCtlGetBatteryStatusOut); 
 	    break;
 
 	case USCTL_SPI_READ:
+	    printf("USCTL_SPI_READ"); 
 	    msg_len = sizeof(UsCtlSPIReadOut); 
             break; 
 
         case USCTL_START_ACQ:
+	    printf("USCTL_START_ACQ"); 
 	    msg_len = sizeof(UsCtlStartAcqOut); 
             break; 	
 
@@ -290,19 +459,23 @@ void scan_dummy_ack_sent_with_payload_handler(int fd, UsCtlHeader *buffer)
     bzero( (void *)buf_sent, msg_len);
     ((UsCtlAck *)buf_sent)->hdr.id = buffer->id; 	
     ((UsCtlAck *)buf_sent)->hdr.opcode = buffer->opcode;  	
-    ((UsCtlAck *)buf_sent)->hdr.length = msg_len-sizeof(UsCtlAck);  /* payload as zero */
+    ((UsCtlAck *)buf_sent)->hdr.length = msg_len-sizeof(UsCtlAck);
     ((UsCtlAck *)buf_sent)->status = startAcqStatus; 
     n_sent = write(fd,buf_sent, msg_len);
     check( n_sent < 0, "Write %s failed: %s", fd, strerror(errno));
-    printf("scan_dummy_ack_sent_with_payload_handler(): Scanner sends ACK with msg length %d to client %d\n", 
-        n_sent, fd);
+    printf("scan_dummy_ack_sent_with_payload_handler(): Scanner sends ACK+payload%d to client %d:", 
+         n_sent, fd);
     data_print_out(n_sent, buf_sent);
+    free(buf_sent); 
     close(fd);
 }
 
-void data_print_out(int length, char buffer[]){
+void data_print_out(int length, char buffer[])
+{
+    /* Data */
     int i;
 
+    /* Code */
     for ( i = 0; i < length; i++) {
         if (!(i%16)) printf("\n%08x  ", i);
         if (!(i%8)) printf(" ");
