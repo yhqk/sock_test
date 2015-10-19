@@ -1,0 +1,28 @@
+# Makefile to compile in local host, which can be used as unit testing.  
+#
+# > make -f MakefileLocal all
+# > make -f MakefileLocal clean
+#
+
+CC = gcc
+LD = ld
+
+CFLAGS = -g -Wall -Wextra -lpthread -I. 
+CFLAGS += -I${PWD}/images/
+
+all: scanner_socket_threads tablet_test_1 tablet_test_2
+
+scanner_socket_threads: scanner_socket_threads.o
+	${CC} -o scanner_socket_threads scanner_socket_threads.c ${CFLAGS}
+
+tablet_test_1: tablet_test_1.o
+	${CC} -o tablet_test_1 tablet_test_1.c ${CFLAGS}
+
+tablet_test_2: tablet_test_2.o
+	${CC} -o tablet_test_2 tablet_test_2.c ${CFLAGS}
+
+clean: 
+	rm -f *.o 
+	rm -f scanner_socket_threads tablet_test_1 tablet_test_2
+
+

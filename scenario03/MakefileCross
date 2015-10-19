@@ -1,0 +1,39 @@
+# Makefile for develop user space application in cross compiling 
+# 
+# > make -f MakefileCross all
+# > make -f MakefileCross clean
+# > make -f MakefileCross install
+# > make -f MakefileCross uninstall
+#
+# rootfs/scanner_socket_threads will be transferred to chip 
+# tablet_test_1 and tablet_test_2 are more or less for debuging
+#
+
+CROSS_PATH=/home/novtech/Projects/buildroot-2014.08/output/host/usr/bin/arm-buildroot-linux-gnueabihf-
+
+CROSS_CC=${CROSS_PATH}gcc -Wall -Wextra -lpthread
+CROSS_LD=${CROSS_PATH}ld
+CFLAGS = -g -Wall -Wextra -I. 
+CFLAGS += -I${PWD}/images/
+
+all: scanner_socket_threads tablet_test_1 tablet_test_2
+
+scanner_socket_threads: scanner_socket_threads.o
+	${CROSS_CC} ${CFLAGS} scanner_socket_threads.c -o scanner_socket_threads 
+
+tablet_test_1: tablet_test_1.o
+	${CROSS_CC} ${CFLAGS} tablet_test_1.c -o tablet_test_1
+
+tablet_test_2: tablet_test_2.o
+	${CROSS_CC} ${CFLAGS} tablet_test_2.c -o tablet_test_2
+ 
+clean: 
+	rm -f *.o 
+	rm -f scanner_socket_threads tablet_test_1 tablet_test_2
+install: 
+	-@if [ ! -d ${PWD}/rootfs   ]; then mkdir -p ${PWD}/rootfs; fi
+	cp scanner_socket_threads tablet_test_1 tablet_test_2 ${PWD}/rootfs
+
+uninstall:
+	rm -fR rootfs
+
