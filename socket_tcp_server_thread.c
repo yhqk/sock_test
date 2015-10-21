@@ -104,10 +104,14 @@ void * client_handler(void *arg) {
 		printf("epoll event %d terminated\n",ready[i].data.fd);
 	    }	
 	    else {
-		if (strlen(buffer) > 30) {
+		if (strlen(buffer) > 0) {
 		    /* In case client is just press enter timestamp wirh size of 30*/
 		    printf("%s",buffer);	
 		    write(ready[i].data.fd,buffer,BUF_SIZE);
+		    /* 1. contract/send  ACK messsage 
+		       2. close TCP socket
+                       3. open UDP socket as client  and send out the data. 
+		    */
 		}
 	    }
 	} 

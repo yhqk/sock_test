@@ -1,3 +1,16 @@
+/* array_test3.c / Yuhong Qiu-Kaikkonen
+
+  The data is ready as files as array and copy to another 
+  2-dimension array, so that it can be sent by loop via UDP
+  in udp_multi_images.c. 
+
+  data_arrat_image0*.h should be stored in inclued path	
+
+  $ gcc -o exec_a array_test3.c -Wall -I${PWD}/images/
+  $ ./exec_a
+
+*/
+
 #include <string.h>  
 #include <stdlib.h>  //exit
 #include <stdio.h>
@@ -28,28 +41,27 @@
 
 int main(int argc, char *argv[])
 {
-
     int i, j, row, column; 
-    uint16_t image[MAX_ROW][MAX_COLUMN];
-    /* zero at beginning */	
-    uint16_t data00[MAX_COLUMN]={0};
+    uint16_t image[MAX_ROW+2][MAX_COLUMN] = {{0},{0}};
 
     row = rows_of_array(image); 
     column = columns_of_array(image); 
 
-    memcpy(&(image[1][0]), &data00, sizeof(data00));
+    /*memcpy(&(image[1][0]), &data00, sizeof(data00)); */
     printf("image/rows_of_array: %d, columns_of_array: %d\n",row, column);
+    memcpy(&(image[1][0]), &data01[0], column*sizeof(uint16_t));
+    printf("size of data01 %d, size of image[1] %d\n", 
+        (int)sizeof(data01), (int)sizeof(image[1]) );
 
-    memcpy(&(image[1][0]), &data01, column);
-    memcpy(&(image[2][0]), &data02, column);
-    memcpy(&(image[3][0]), &data03, column);
-    memcpy(&(image[4][0]), &data04, column);
-    memcpy(&(image[5][0]), &data05, column);
-    memcpy(&(image[6][0]), &data06, column);
-    memcpy(&(image[7][0]), &data07, column);
-    memcpy(&(image[8][0]), &data08, column);
-    memcpy(&(image[9][0]), &data09, column);
-    memcpy(&(image[10][0]), &data10, column);
+    memcpy(&(image[2][0]), &data02[0], column*sizeof(uint16_t) );
+    memcpy(&(image[3][0]), &data03[0], column*sizeof(uint16_t));
+    memcpy(&(image[4][0]), &data04[0], column*sizeof(uint16_t));
+    memcpy(&(image[5][0]), &data05[0], column*sizeof(uint16_t));
+    memcpy(&(image[6][0]), &data06[0], column*sizeof(uint16_t));    
+    memcpy(&(image[7][0]), &data07[0], column*sizeof(uint16_t));
+    memcpy(&(image[8][0]), &data08[0], column*sizeof(uint16_t));
+    memcpy(&(image[9][0]), &data09[0], column*sizeof(uint16_t));
+    memcpy(&(image[10][0]), &data10[0], column*sizeof(uint16_t));
 
     for (i=0; i < row; i++) 
 	{

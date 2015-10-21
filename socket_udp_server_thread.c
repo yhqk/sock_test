@@ -7,6 +7,9 @@
   $ gcc -o exec_s socket_udp_server_thread.c -Wall -Wextra -lpthread
   $ ./exec_s 5000 
 
+Maybe no use for this epoll
+http://stackoverflow.com/questions/3959295/multithreading-udp-server-with-epoll
+
   There can be several clients from different terminals. 
  */
 
@@ -39,6 +42,7 @@ int main(int argc, char *argv[])
     int sockUDPfd, portno, epfd;
     int a = 1;
     struct sockaddr_in addr_in;
+    socklen_t len = sizeof(struct sockaddr_in);
     struct epoll_event event;    
     pthread_t helper_thread;
     pthread_attr_t thread_attr;
@@ -69,7 +73,8 @@ int main(int argc, char *argv[])
 
     pthread_create(&helper_thread, &thread_attr, client_handler, &epfd);	
     while(1) {
-	listen(sockUDPfd,BACKLOG);
+	listen(sockUDPfd,BACKLOG);  /* listen is not part of UDP no point of epoll*/
+/*	n = recvfrom(sockUDPfd, buf, BUF_SIZE, 0, (struct sockaddr *)&addr_in, &len); */
 	event.data.fd = sockUDPfd;
 	event.events = EPOLLIN;
 	epoll_ctl(epfd, EPOLL_CTL_ADD, sockUDPfd, &event);

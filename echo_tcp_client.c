@@ -22,6 +22,8 @@
 #include <errno.h>
 #include <stdarg.h>
 
+#include "scanner_tablet_msg.h"
+
 #define BUF_SIZE 256
 
 uint16_t data01[] = {

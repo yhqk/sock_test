@@ -1,0 +1,40 @@
+# Makefile for develop user space application in cross compiling 
+#
+# make -f MakefileCross clean
+# make -f MakefileCross all
+# make -f MakefileCross install
+# make -f MakefileCross uninstall
+#
+# scanner: rootfs/startAcq_scanner_test1
+# Tablet : rootfs/startAcq_tablet_test1
+# 
+# Usage of arguments are described in the C module
+#
+#
+
+CROSS_PATH=/home/novtech/Projects/buildroot-2014.08/output/host/usr/bin/arm-buildroot-linux-gnueabihf-
+
+CROSS_CC=${CROSS_PATH}gcc -Wall -Wextra -lpthread
+CROSS_LD=${CROSS_PATH}ld
+CFLAGS = -g -Wall -Wextra -I. 
+CFLAGS += -I${PWD}/images/
+
+all: startAcq_scanner_test1 startAcq_tablet_test1 
+
+startAcq_scanner_test1: startAcq_scanner_test1.o
+	${CROSS_CC} ${CFLAGS} startAcq_scanner_test1.c -o startAcq_scanner_test1 
+
+startAcq_scanner_multi: startAcq_scanner_multi.o
+	${CROSS_CC} ${CFLAGS} startAcq_scanner_multi.c -o startAcq_scanner_multi 
+
+clean: 
+	rm -f *.o 
+	rm -f startAcq_tablet_test1 startAcq_scanner_test1
+
+install: 
+	-@if [ ! -d ${PWD}/rootfs   ]; then mkdir -p ${PWD}/rootfs; fi
+	cp startAcq_tablet_test1 startAcq_scanner_test1 ${PWD}/rootfs
+
+uninstall:
+	rm -fR rootfs
+

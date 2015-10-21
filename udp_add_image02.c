@@ -67,6 +67,7 @@ int main(int argc, char *argv[])
     uint delay_usec; 
     time_t time_start, time_gap, time_start_per_image; 
     float throughput;
+    uint16_t image[160*1000] = {0};
     struct hostent *host;
     int n=1;
 //    int i;   	
@@ -95,6 +96,9 @@ int main(int argc, char *argv[])
     time_start = time(NULL); /* seconds */  
     time_start_per_image = time_start;
 
+
+    memcpy(&image[0], &data01[0], sizeof(image) );
+ 
     while(1) {
         // generate proper header.
         DGRAM dgram;
@@ -102,10 +106,9 @@ int main(int argc, char *argv[])
         dgram.packet = packet;
         dgram.offset = offset;
 
-        copy_size = sizeof(data01) - offset; /* 160000*2 */
+        copy_size = sizeof(image) - offset;
         if (copy_size > IMAGE_BLOCK_SIZE ) copy_size = IMAGE_BLOCK_SIZE;
-
-        memcpy(&(dgram.image), &(data01[offset/2]), copy_size);
+        memcpy(&(dgram.image), image + offset/2, copy_size);
 
 	nsent = sendto(sockUDPfd, &dgram, DGRAM_SIZE, 0, (struct sockaddr *)&si_other, slen);  	
         check (nsent < 0, "sentto() %s failed: %s", sockUDPfd, strerror(errno));
@@ -123,14 +126,20 @@ int main(int argc, char *argv[])
                total_sent = 0; 
 	   } 	
 
-    	if (offset >= sizeof(data01)) {
+    	if (offset >= sizeof(image)) {
        	    packet = 0;
             offset = 0;
       	    frame++;
 	    time_gap = time(NULL) - time_start_per_image;
 	    if (time_gap > 0 )
 	        {
-                throughput = ((double)(sizeof(data01)*n)/1000000)/time_gap;
+                throughput = ((double)(sizeof(image)*n)/1000000)/time_gap;
+		/*  no need to print 1st 5 elements since it is the same data
+	        for (i=0; i<5; i++)
+   	            {	 
+	            printf("%d,",image[i]); 	
+	            }	
+	        printf("......\n"); */ 
 	        printf("Frame No%3d: throughput/(%d images): %.2f MB/s = %.2f Mbits/s\n", 
                     frame, n, throughput, throughput*8 ); 
 	    	time_start_per_image = time(NULL);
